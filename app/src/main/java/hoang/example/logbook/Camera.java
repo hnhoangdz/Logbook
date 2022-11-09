@@ -20,9 +20,11 @@ import androidx.lifecycle.LifecycleOwner;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -40,6 +42,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
@@ -61,11 +64,13 @@ public class Camera extends AppCompatActivity implements ImageAnalysis.Analyzer 
             ,"android.permission.RECORD_AUDIO"};
     ImageView imageView;
     EditText inputPictureUri;
+    DatabaseHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.camera);
+        dbHelper =  new DatabaseHelper(getApplicationContext());
 
         imageView = findViewById(R.id.imageView);
         inputPictureUri = findViewById(R.id.inputUri);
@@ -75,6 +80,7 @@ public class Camera extends AppCompatActivity implements ImageAnalysis.Analyzer 
             ActivityCompat.requestPermissions(this,REQUIRED_PERMISSIONS,REQUEST_CODE_PERMISSIONS);
         }
         startCamera();
+        initSaveImage();
 
         btn.setOnClickListener(view -> {
             final String[]  options = {"Take photo","Choose from library","View a picture from Uri"};
@@ -96,26 +102,29 @@ public class Camera extends AppCompatActivity implements ImageAnalysis.Analyzer 
         });
 
     }
+
+    private void initSaveImage(){
+        findViewById(R.id.btnSave).setOnClickListener(v -> {
+            dbHelper.insertImage(inputPictureUri.getText().toString());
+            Toast.makeText(Camera.this, "Save Image", Toast.LENGTH_SHORT).show();
+        });
+    }
     // /data/user/0/com.example.cameraxdemo/files/1664772838768
     private void takePicture() {
         long timestamp = System.currentTimeMillis();
+        File output = new File(getApplicationContext().getFilesDir(), "Image_"+ timestamp + ".png");
         ImageCapture.OutputFileOptions option1 = new ImageCapture.OutputFileOptions
-                .Builder(new File(getApplicationContext().getFilesDir(), String.valueOf(timestamp))).build();
+                .Builder(output).build();
         imageCapture.takePicture(
                 option1,
                 executor,
                 new ImageCapture.OnImageSavedCallback(){
                     @Override
                     public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-                        //Update the UI: imageView
                         runOnUiThread(()->{
-                            final Uri selectedImage = outputFileResults.getSavedUri();
-                            try {
-                                inputPictureUri.setText(outputFileResults.getSavedUri().getPath());
-                                imageView.setImageBitmap(MediaStore.Images.Media.getBitmap(getContentResolver(),selectedImage));
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
+                                inputPictureUri.setText(output.getAbsolutePath());
+                                Glide.with(imageView).load(output.getAbsolutePath()).into(imageView);
+
                         });
                     }
                     @Override
